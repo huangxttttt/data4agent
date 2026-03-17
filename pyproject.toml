@@ -1,0 +1,15 @@
+[project]
+name = "url4sub"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.116.0",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.10.1",
+    "uvicorn>=0.35.0",
+]
+
+[project.scripts]
+url4sub = "main:main"
