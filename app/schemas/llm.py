@@ -7,6 +7,7 @@ class LlmChatRequest(BaseModel):
 
 
 class LlmChatResponse(BaseModel):
+    title: str
     answer: str
     model: str
     chunk_count: int

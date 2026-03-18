@@ -13,6 +13,11 @@ FINAL_SYSTEM_PROMPT = (
     "You are a helpful assistant. Combine the chunk-level answers into one final answer. "
     "Remove duplication, keep the answer concise, and say clearly if the source chunks are insufficient."
 )
+TITLE_SYSTEM_PROMPT = (
+    "You are a helpful assistant. Generate a short Chinese title primarily based on the provided source data. "
+    "The title must reflect the main theme of the data itself, not just restate the question or answer. "
+    "Keep it within 8 to 16 Chinese characters when possible, avoid punctuation, and return only the title."
+)
 
 
 class LlmInputTooLargeError(ValueError):
@@ -99,7 +104,18 @@ async def _call_chat_completion(
     raise last_error
 
 
-async def generate_llm_reply(data: list[str], question: str) -> tuple[str, str, int]:
+async def _generate_title(
+    client: httpx.AsyncClient,
+    data: list[str],
+    question: str,
+    answer: str,
+) -> tuple[str, str]:
+    source_data = "\n".join(f"{index}. {item}" for index, item in enumerate(data, start=1))
+    user_content = f"Source data:\n{source_data}\n\nQuestion:\n{question}\n\nAnswer:\n{answer}"
+    return await _call_chat_completion(client, TITLE_SYSTEM_PROMPT, user_content)
+
+
+async def generate_llm_reply(data: list[str], question: str) -> tuple[str, str, str, int]:
     _validate_total_input_size(data, question)
     chunks = _build_chunked_data(data, settings.llm_chunk_max_chars)
     model = settings.llm_model
@@ -132,13 +148,16 @@ async def generate_llm_reply(data: list[str], question: str) -> tuple[str, str, 
             chunk_answers.append(f"Chunk {index} answer:\n{chunk_answer}")
 
         if len(chunk_answers) == 1:
-            return chunk_answers[0].split("\n", 1)[1], model, 1
+            final_answer = chunk_answers[0].split("\n", 1)[1]
+        else:
+            summary_content = (
+                "The following are answers generated from multiple data chunks.\n\n"
+                f"{'\n\n'.join(chunk_answers)}\n\n"
+                f"Final question:\n{question}"
+            )
+            final_answer, model = await _call_chat_completion(client, FINAL_SYSTEM_PROMPT, summary_content)
 
-        summary_content = (
-            "The following are answers generated from multiple data chunks.\n\n"
-            f"{'\n\n'.join(chunk_answers)}\n\n"
-            f"Final question:\n{question}"
-        )
-        final_answer, model = await _call_chat_completion(client, FINAL_SYSTEM_PROMPT, summary_content)
+        title, title_model = await _generate_title(client, data, question, final_answer)
+        model = title_model
 
-    return final_answer, model, len(chunks)
+    return title.strip(), final_answer, model, len(chunks)

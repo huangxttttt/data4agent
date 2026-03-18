@@ -1,0 +1,9 @@
+services:
+  app:
+    image: bill73777/data2agent:latest
+    container_name: url4sub-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
